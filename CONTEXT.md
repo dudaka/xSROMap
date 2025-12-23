@@ -2,7 +2,11 @@
 
 ## Overview
 
-This C# program (`main.cs`) parses Silkroad Online game data files to generate JavaScript files containing NPC and teleport information for a web-based map application.
+This project parses Silkroad Online game data files to generate JavaScript files containing NPC and teleport information for a web-based map application.
+
+**Available Implementations:**
+- **C# version**: `main.cs` - Original implementation
+- **Python version**: `main.py` - Uses pandas DataFrames for data processing
 
 ## Program Workflow
 
@@ -477,7 +481,97 @@ textzonename_all.txt ─────────────────► Regi
 
 ## Usage Notes
 
-1. **Input files must be in the working directory** (not in `data/` subdirectory based on code)
+1. **Input files must be in the `data/` subdirectory**
 2. **File format**: TSV (Tab-Separated Values) with UTF-16 LE encoding
 3. **Output**: JavaScript files with single-quoted JSON-like syntax
 4. **Character escaping**: Single quotes in names are escaped as `\'`
+
+---
+
+## Python Implementation
+
+### Requirements
+
+The Python version uses a conda environment with the following dependencies:
+- Python 3.11
+- pandas >= 2.0
+
+### Environment Setup
+
+```bash
+# Create conda environment
+conda env create -f environment.yml
+
+# Activate environment
+conda activate xsromap
+```
+
+### Usage
+
+```bash
+# Run with data directory
+python main.py --data-dir ./data
+
+# Or from the data directory
+cd data && python ../main.py
+```
+
+### Python Data Classes
+
+```python
+@dataclass
+class Model:
+    id: int              # Unique identifier
+    server_name: str     # Internal codename
+    name: str            # Localized display name
+    tid2: int            # Type ID level 2
+    tid3: int            # Type ID level 3
+    tid4: int            # Type ID level 4
+    region: str          # Map region
+    x: str               # X coordinate
+    y: str               # Y coordinate
+    z: str               # Z coordinate
+    links: list          # Associated teleport destinations
+
+@dataclass
+class Teleport:
+    id: int              # Model ID
+    source_id: int       # Teleport source identifier
+    name: str            # Display name
+    server_name: str     # Internal name
+    region: str          # Map region
+    x: str               # X coordinate
+    y: str               # Y coordinate
+    z: str               # Z coordinate
+    links: list          # Available destinations
+
+@dataclass
+class Destination:
+    name: str            # Destination name
+    region: str          # Map region
+    x: str               # X coordinate
+    y: str               # Y coordinate
+    z: str               # Z coordinate
+```
+
+### Key Features (Python)
+
+1. **Pandas DataFrames**: Uses pandas for efficient TSV file reading and processing
+2. **Multiple Encoding Support**: Automatically tries UTF-16, UTF-16-LE, and UTF-8 encodings
+3. **Error Handling**: Skips malformed lines gracefully with `on_bad_lines='skip'`
+4. **Dataclasses**: Clean data structures using Python dataclasses
+5. **Command-line Interface**: Supports `--data-dir` argument for flexible data location
+
+### Method Mapping (C# → Python)
+
+| C# Method | Python Method |
+|-----------|---------------|
+| `LoadNameReferences()` | `load_name_references()` |
+| `LoadModels()` | `load_models()` |
+| `GenerateNPCs()` | `generate_npcs()` |
+| `LoadTeleportData()` | `load_teleport_data()` |
+| `LoadRegions()` | `load_regions()` |
+| `LoadTeleportLinks()` | `load_teleport_links()` |
+| `GenerateTeleportLinks()` | `generate_teleport_links()` |
+| `GetNameReference()` | `_get_name_reference()` |
+| `GetRegionReference()` | `_get_region_reference()` |
