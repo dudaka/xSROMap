@@ -278,6 +278,16 @@
 								</ul>
 							</div>
 						</li>
+						<li class="header-menu">
+							<span>Overlays</span>
+						</li>
+						<li id="navmesh-toggle">
+							<a href="#" onclick="toggleNavMeshButton()">
+								<i class="fa fa-draw-polygon"></i>
+								<span>NavMesh Collision</span>
+								<span id="navmesh-status" class="badge badge-pill badge-secondary">OFF</span>
+							</a>
+						</li>
 					</ul>
 				</div>
 				<!-- sidebar-menu  -->
@@ -353,6 +363,20 @@
 	function gtag(){dataLayer.push(arguments);}
 	gtag('js', new Date());
 	gtag('config', 'G-T0ZRSLYW9K');
+	// NavMesh toggle button handler
+	function toggleNavMeshButton() {
+		var isVisible = xSROMap.ToggleNavMesh();
+		var statusBadge = document.getElementById('navmesh-status');
+		if (isVisible) {
+			statusBadge.textContent = 'ON';
+			statusBadge.classList.remove('badge-secondary');
+			statusBadge.classList.add('badge-success');
+		} else {
+			statusBadge.textContent = 'OFF';
+			statusBadge.classList.remove('badge-success');
+			statusBadge.classList.add('badge-secondary');
+		}
+	}
 	</script>
 </body>
 </html>

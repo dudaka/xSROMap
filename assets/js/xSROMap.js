@@ -70,6 +70,19 @@ var xSROMap = (function () {
     location: {},
   };
   var mappingShapes = {};
+  // NavMesh rendering state
+  var navmeshLayers = {};      // regionId -> L.layerGroup
+  var navmeshCache = {};       // regionId -> data (loaded from AJAX)
+  var navmeshVisible = false;  // Global visibility toggle
+  var navmeshLoading = {};     // regionId -> Promise (prevent duplicate loads)
+  var navmeshDataPath = 'data/navmesh/';
+  // NavMesh edge styles
+  var navmeshStyles = {
+    terrain: { color: '#FF0000', weight: 1, opacity: 0.8 },
+    bridge: { color: '#00FF00', weight: 2, opacity: 0.9 },
+    object: { color: '#FF6600', weight: 1, opacity: 0.7 },
+    global: { color: '#0066FF', weight: 2, opacity: 0.6 }
+  };
   // xSRO Map conversions
   var CoordMapToSRO = function (latlng) {
     // world layer
@@ -370,6 +383,10 @@ var xSROMap = (function () {
     map.on('pm:remove', function (f) {
       delete mappingShapes[f.layer.xMap.id];
     });
+    // NavMesh: refresh on map move/zoom
+    map.on('moveend zoomend', function () {
+      refreshNavMesh();
+    });
   };
   var setInitialView = function (coord) {
     var GET = function (parameter) {
@@ -489,6 +506,135 @@ var xSROMap = (function () {
     document.execCommand('copy');
     document.body.removeChild(e);
   };
+  // ========================================
+  // NavMesh rendering functions
+  // ========================================
+  var getVisibleRegions = function () {
+    // Get visible region IDs from current map bounds
+    var bounds = map.getBounds();
+    var sw = bounds.getSouthWest();
+    var ne = bounds.getNorthEast();
+    // Convert lat/lng to sector coordinates
+    // lat = ySector + y/1920 - 1, so ySector = floor(lat + 1)
+    // lng = xSector + x/1920, so xSector = floor(lng)
+    var minXSector = Math.max(0, Math.floor(sw.lng));
+    var maxXSector = Math.min(255, Math.floor(ne.lng));
+    var minYSector = Math.max(0, Math.floor(sw.lat + 1));
+    var maxYSector = Math.min(255, Math.floor(ne.lat + 1));
+    var regions = [];
+    for (var y = minYSector; y <= maxYSector; y++) {
+      for (var x = minXSector; x <= maxXSector; x++) {
+        regions.push((y << 8) | x);
+      }
+    }
+    return regions;
+  };
+  var loadNavMeshForRegion = function (regionId) {
+    // Return cached data if available
+    if (navmeshCache[regionId]) {
+      return Promise.resolve(navmeshCache[regionId]);
+    }
+    // Return existing loading promise if in progress
+    if (navmeshLoading[regionId]) {
+      return navmeshLoading[regionId];
+    }
+    // Start new AJAX load
+    var hexId = regionId.toString(16).padStart(4, '0');
+    var url = navmeshDataPath + 'nv_' + hexId + '.json';
+    navmeshLoading[regionId] = fetch(url)
+      .then(function (response) {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then(function (data) {
+        if (data) {
+          navmeshCache[regionId] = data;
+          if (navmeshVisible) {
+            renderNavMeshRegion(regionId, data);
+          }
+        }
+        delete navmeshLoading[regionId];
+        return data;
+      })
+      .catch(function (err) {
+        delete navmeshLoading[regionId];
+        return null;
+      });
+    return navmeshLoading[regionId];
+  };
+  var renderNavMeshRegion = function (regionId, data) {
+    // Remove existing layer for this region if any
+    if (navmeshLayers[regionId]) {
+      map.removeLayer(navmeshLayers[regionId]);
+    }
+    // Create layer group for this region
+    var layerGroup = L.layerGroup();
+    // Render terrain edges (blocking edges)
+    if (data.terrain_edges) {
+      data.terrain_edges.forEach(function (edge) {
+        var latlngs = [
+          [edge[0], edge[1]],
+          [edge[2], edge[3]]
+        ];
+        L.polyline(latlngs, navmeshStyles.terrain).addTo(layerGroup);
+      });
+    }
+    // Render object edges (collision from buildings)
+    if (data.object_edges) {
+      data.object_edges.forEach(function (edge) {
+        var latlngs = [
+          [edge[0], edge[1]],
+          [edge[2], edge[3]]
+        ];
+        var flag = edge[4] || 0;
+        // Bridge flag = 16
+        var style = (flag === 16) ? navmeshStyles.bridge : navmeshStyles.object;
+        L.polyline(latlngs, style).addTo(layerGroup);
+      });
+    }
+    // Render global edges (region boundaries)
+    if (data.global_edges) {
+      data.global_edges.forEach(function (edge) {
+        var latlngs = [
+          [edge[0], edge[1]],
+          [edge[2], edge[3]]
+        ];
+        L.polyline(latlngs, navmeshStyles.global).addTo(layerGroup);
+      });
+    }
+    // Store and add to map
+    navmeshLayers[regionId] = layerGroup;
+    if (navmeshVisible) {
+      layerGroup.addTo(map);
+    }
+  };
+  var refreshNavMesh = function () {
+    if (!navmeshVisible) return;
+    // Only load navmesh at sufficient zoom level
+    if (map.getZoom() < 6) return;
+    var regions = getVisibleRegions();
+    regions.forEach(function (regionId) {
+      // Only load for world map regions
+      if (regionId <= 32767) {
+        loadNavMeshForRegion(regionId);
+      }
+    });
+  };
+  var showAllNavMeshLayers = function () {
+    for (var regionId in navmeshLayers) {
+      if (!map.hasLayer(navmeshLayers[regionId])) {
+        navmeshLayers[regionId].addTo(map);
+      }
+    }
+  };
+  var hideAllNavMeshLayers = function () {
+    for (var regionId in navmeshLayers) {
+      if (map.hasLayer(navmeshLayers[regionId])) {
+        map.removeLayer(navmeshLayers[regionId]);
+      }
+    }
+  };
+  // ========================================
   var addShapeEditListener = function (shape) {
     // create register
     mappingShapes[shape.xMap.id] = shape;
@@ -981,6 +1127,48 @@ var xSROMap = (function () {
         }
       }
       mappingShapes = {};
+    },
+    // ========================================
+    // NavMesh public methods
+    // ========================================
+    ToggleNavMesh() {
+      navmeshVisible = !navmeshVisible;
+      if (navmeshVisible) {
+        // Show existing layers and load visible regions
+        showAllNavMeshLayers();
+        refreshNavMesh();
+      } else {
+        // Hide all navmesh layers
+        hideAllNavMeshLayers();
+      }
+      return navmeshVisible;
+    },
+    ShowNavMesh() {
+      if (!navmeshVisible) {
+        navmeshVisible = true;
+        showAllNavMeshLayers();
+        refreshNavMesh();
+      }
+    },
+    HideNavMesh() {
+      if (navmeshVisible) {
+        navmeshVisible = false;
+        hideAllNavMeshLayers();
+      }
+    },
+    IsNavMeshVisible() {
+      return navmeshVisible;
+    },
+    // Pre-load navmesh for specific region(s)
+    PreloadNavMesh(regionIds) {
+      if (!Array.isArray(regionIds)) {
+        regionIds = [regionIds];
+      }
+      return Promise.all(regionIds.map(loadNavMeshForRegion));
+    },
+    // Set custom data path for navmesh files
+    SetNavMeshPath(path) {
+      navmeshDataPath = path;
     },
   };
 })();

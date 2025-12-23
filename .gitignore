@@ -1,2 +1,8 @@
 # Data files
 data/
+
+tools/navmesh.json
+
+tools/output
+
+tools/__pycache__
