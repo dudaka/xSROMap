@@ -437,16 +437,39 @@ Model must satisfy:
 
 ## Configuration
 
+### Language Selection
+
+The parser supports multiple output languages via command-line argument:
+
+```bash
+# English (default)
+python main.py --data-dir ./data
+
+# Vietnamese
+python main.py --data-dir ./data --language vi
+python main.py --data-dir ./data -l vi
+```
+
+**Supported Languages:**
+| Code | Language   | Column Index |
+|------|------------|--------------|
+| en   | English    | 9            |
+| vi   | Vietnamese | 10           |
+
+**Python Configuration:**
+```python
+LANGUAGE_INDICES = {
+    "en": 9,   # English
+    "vi": 10,  # Vietnamese
+}
+```
+
+**C# Configuration (legacy):**
 ```csharp
 private static byte LanguageIndex = 9;  // English language column index
 ```
 
-To change language output, modify `LanguageIndex` to the appropriate column:
-| Index | Language |
-|-------|----------|
-| 9     | English  |
-| 3-4   | Chinese variants |
-| ...   | Other languages |
+To add more languages, add entries to the `LANGUAGE_INDICES` dictionary with the appropriate column index from the text data files.
 
 ---
 
@@ -509,8 +532,12 @@ conda activate xsromap
 ### Usage
 
 ```bash
-# Run with data directory
+# Run with data directory (English, default)
 python main.py --data-dir ./data
+
+# Run with Vietnamese language
+python main.py --data-dir ./data --language vi
+python main.py --data-dir ./data -l vi
 
 # Or from the data directory
 cd data && python ../main.py
@@ -560,7 +587,8 @@ class Destination:
 2. **Multiple Encoding Support**: Automatically tries UTF-16, UTF-16-LE, and UTF-8 encodings
 3. **Error Handling**: Skips malformed lines gracefully with `on_bad_lines='skip'`
 4. **Dataclasses**: Clean data structures using Python dataclasses
-5. **Command-line Interface**: Supports `--data-dir` argument for flexible data location
+5. **Command-line Interface**: Supports `--data-dir` and `--language` arguments
+6. **Multi-language Support**: Output names in English (default) or Vietnamese via `-l` flag
 
 ### Method Mapping (C# → Python)
 

@@ -11,8 +11,11 @@ import pandas as pd
 from dataclasses import dataclass, field
 
 
-# Configuration
-LANGUAGE_INDEX = 9  # English language column index
+# Language column indices in text data files
+LANGUAGE_INDICES = {
+    "en": 9,   # English
+    "vi": 10,  # Vietnamese
+}
 
 
 @dataclass
@@ -62,8 +65,10 @@ class Model:
 class XSROMapParser:
     """Main parser class for xSROMap data."""
 
-    def __init__(self, data_dir: str = "."):
+    def __init__(self, data_dir: str = ".", language: str = "en"):
         self.data_dir = data_dir
+        self.language = language
+        self.language_index = LANGUAGE_INDICES.get(language, LANGUAGE_INDICES["en"])
         self.name_references: dict[str, str] = {}
         self.models: dict[int, Model] = {}
         self.teleport_data: dict[str, pd.Series] = {}
@@ -101,7 +106,7 @@ class XSROMapParser:
 
     def load_name_references(self) -> None:
         """Load name references from text data files."""
-        print("Loading name references..")
+        print(f"Loading name references ({self.language})..")
         files = ["textdata_equip&skill_all.txt", "textdata_object_all.txt"]
 
         for filename in files:
@@ -111,15 +116,15 @@ class XSROMapParser:
             enabled_df = df[df.iloc[:, 0] == "1"]
 
             for _, row in enabled_df.iterrows():
-                if len(row) > LANGUAGE_INDEX and row.iloc[LANGUAGE_INDEX] != "0":
+                if len(row) > self.language_index and row.iloc[self.language_index] != "0":
                     # Check if data[1] is numeric (iSRO format)
                     try:
                         int(row.iloc[1])
                         # iSRO format: key = data[2]
-                        self.name_references[row.iloc[2]] = row.iloc[LANGUAGE_INDEX]
+                        self.name_references[row.iloc[2]] = row.iloc[self.language_index]
                     except ValueError:
                         # Standard format: key = data[1]
-                        self.name_references[row.iloc[1]] = row.iloc[LANGUAGE_INDEX]
+                        self.name_references[row.iloc[1]] = row.iloc[self.language_index]
 
     def _get_name_reference(self, server_name: str) -> str:
         """Get name from references or return empty string."""
@@ -212,13 +217,13 @@ class XSROMapParser:
 
     def load_regions(self) -> None:
         """Load zone name references."""
-        print("Loading zonename references..")
+        print(f"Loading zonename references ({self.language})..")
         df = self._read_tsv("textzonename_all.txt")
 
         enabled_df = df[df.iloc[:, 0] == "1"]
         for _, row in enabled_df.iterrows():
-            if len(row) > LANGUAGE_INDEX and row.iloc[LANGUAGE_INDEX] != "0":
-                self.region_references[row.iloc[1]] = row.iloc[LANGUAGE_INDEX]
+            if len(row) > self.language_index and row.iloc[self.language_index] != "0":
+                self.region_references[row.iloc[1]] = row.iloc[self.language_index]
 
     def _get_region_reference(self, server_name: str) -> str:
         """Get region name from references or return empty string."""
@@ -402,9 +407,15 @@ def main():
         default=".",
         help="Directory containing the data files (default: current directory)"
     )
+    parser.add_argument(
+        "--language", "-l",
+        choices=list(LANGUAGE_INDICES.keys()),
+        default="en",
+        help="Language for NPC/location names: en=English (default), vi=Vietnamese"
+    )
     args = parser.parse_args()
 
-    xsro_parser = XSROMapParser(data_dir=args.data_dir)
+    xsro_parser = XSROMapParser(data_dir=args.data_dir, language=args.language)
     xsro_parser.run()
 
 
